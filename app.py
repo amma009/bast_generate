@@ -125,7 +125,7 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police, total_koli):
     )
     label_style = ParagraphStyle(
         "LabelStyle", parent=styles["Normal"],
-        alignment=1, fontSize=20
+        alignment=1, fontSize=16
     )
 
     total_koli_box = Table(
@@ -172,6 +172,9 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police, total_koli):
             ["Diperiksa oleh", "Diserahkan oleh", "Diterima oleh"],
             ["", "", ""], ["", "", ""], ["", "", ""],
             ["__________________", "__________________", "__________________"],
+             ["(Security WH)", "( Dispacther WH )", "( Driver Courir )"],
+
+            
         ],
         colWidths=[180, 180, 180],
     )

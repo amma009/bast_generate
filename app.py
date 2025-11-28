@@ -107,7 +107,7 @@ class NumberedCanvas(canvas.Canvas):
         self.drawRightString(A4[0] - 40, 0.5 * inch, text)
 
 # -----------------------
-# Generate PDF function
+# Generate PDF function (hides TIMESTAMP column from PDF)
 # -----------------------
 def generate_pdf(df, tanggal, warehouse, courier, driver, police, total_koli):
     buffer = io.BytesIO()
@@ -162,7 +162,14 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police, total_koli):
     # Table data
     # Convert any NaN to empty string for clean PDF
     df_clean = df.fillna("")
-    table_data = [list(df_clean.columns)] + df_clean.values.tolist()
+
+    # --- HIDE TIMESTAMP column from PDF: create a copy and drop TIMESTAMP if present
+    df_pdf = df_clean.copy()
+    if "TIMESTAMP" in df_pdf.columns:
+        df_pdf = df_pdf.drop(columns=["TIMESTAMP"])
+
+    # Now build table data from df_pdf (so TIMESTAMP won't appear)
+    table_data = [list(df_pdf.columns)] + df_pdf.values.tolist()
     table = Table(table_data, repeatRows=1)
     table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
@@ -212,6 +219,11 @@ if uploaded_file:
         st.error(f"❌ Gagal membaca file: {e}")
         st.stop()
 
+    # If the file has a timestamp-like column but with different name, you can normalize it here.
+    # For example, if file has "TIME STAMP" column and you want to keep it as "TIMESTAMP" for preview:
+    if "TIME STAMP" in df.columns and "TIMESTAMP" not in df.columns:
+        df["TIMESTAMP"] = df["TIME STAMP"]
+
     is_valid, errors = validate_excel_file(df)
     if not is_valid:
         st.error("❌ Validasi gagal:")
@@ -225,6 +237,7 @@ if uploaded_file:
             total_koli = "N/A"
 
         st.success("✅ File valid!")
+        # show preview including TIMESTAMP (if present)
         st.dataframe(df, use_container_width=True)
 
         st.markdown("---")

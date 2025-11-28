@@ -29,7 +29,7 @@ with col2:
 
 st.header("Upload Excel Data")
 
-uploaded_file = st.file_uploader("Pilih file Excel", type=["xlsx", "xls"])
+uploaded_file = st.file_uploader("Pilih file Excel", type=["xlsx", "xls","csv"])
 
 
 def validate_excel_file(df):
@@ -101,7 +101,7 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police, total_koli):
     # Total Koli dalam kotak + besar
     total_koli_box = Table(
         [[Paragraph(f"<b style='font-size:20px'>TOTAL KOLI</b>", styles['Normal'])],
-         [Paragraph(f"<b style='font-size:26px'>{total_koli}</b>", styles['Normal'])]],
+         [Paragraph(f"<b style='font-size:36px'>{total_koli}</b>", styles['Normal'])]],
         colWidths=[120]
     )
 

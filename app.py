@@ -227,14 +227,24 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police, total_koli):
     elements.append(table)
     elements.append(Spacer(1, 15))
 
-    # Signature section
+    # -----------------------
+    # Signature section with centered note
+    # -----------------------
+    note_style = ParagraphStyle(
+        "Note",
+        parent=styles["Normal"],
+        alignment=1,  # center
+        fontSize=8,
+        leading=10
+    )
+
     sign = Table(
         [
             ["Diperiksa oleh", "Diserahkan oleh", "Diterima oleh"],
             ["", "", ""], ["", "", ""], ["", "", ""],
             ["__________________", "__________________", "__________________"],
             ["(Security WH)", "(Dispatcher WH)", "(Driver Courier)"],
-            ["* BAST ini sebagai bukti bahwa paket sudah diserahkan dengan kondisi baik dan jumlah koli sesuai."]
+            [Paragraph("* BAST ini sebagai bukti bahwa paket sudah diserahkan dengan kondisi baik dan jumlah koli sesuai.", note_style)]
         ],
         colWidths=[page_width/3]*3
     )

@@ -147,6 +147,9 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police, total_koli):
     signature_table = Table(
         [
             ["Diperiksa oleh", "Diserahkan oleh", "Diterima oleh"],
+             ["", "", ""],
+             ["", "", ""],
+             ["", "", ""],
             ["__________________", "__________________", "__________________"]
         ],
         colWidths=[180, 180, 180]

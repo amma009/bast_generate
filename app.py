@@ -214,7 +214,8 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police, total_koli):
             ["Diperiksa oleh", "Diserahkan oleh", "Diterima oleh"],
             ["", "", ""], ["", "", ""], ["", "", ""],
             ["__________________", "__________________", "__________________"],
-            ["(Security WH)", "(Dispatcher WH)", "(Driver Courier)"]
+            ["(Security WH)", "(Dispatcher WH)", "(Driver Courier)"],
+            ["* BAST Ini sebagai Bukti Bahwa Paket Sudah di Serahkan Dengan Kondisi Baik dan Kuantiti Koli yang Sesuai "]
         ],
         colWidths=[page_width/3]*3
     )

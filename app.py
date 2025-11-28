@@ -24,12 +24,10 @@ with col1:
     courier = st.text_input("Courier Name")
 
 with col2:
-    # Time input without default now()
     waktu_only = st.time_input("Waktu", value=time(0, 0))
     driver = st.text_input("Driver Name")
     police = st.text_input("Police Number")
 
-# Combine date & time (no timezone)
 def make_datetime(date_obj, time_obj):
     return datetime(date_obj.year, date_obj.month, date_obj.day,
                     time_obj.hour, time_obj.minute, time_obj.second)
@@ -69,6 +67,7 @@ def validate_file(df):
 
     return len(errors) == 0, errors
 
+
 # -----------------------
 # PDF Canvas + Page Numbers
 # -----------------------
@@ -95,6 +94,7 @@ class NumberedCanvas(canvas.Canvas):
         self.setFont("Helvetica", 9)
         self.drawRightString(A4[0] - 40, 0.5 * inch, text)
 
+
 # -----------------------
 # PDF Generator
 # -----------------------
@@ -112,7 +112,14 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police, total_koli):
     elements = []
 
     # Title
-    elements.append(Paragraph("<b>BERITA ACARA SERAH TERIMA</b>", styles["Title"]))
+    title_style = ParagraphStyle(
+        "CenteredTitle",
+        parent=styles["Title"],
+        alignment=1,
+        fontSize=18,
+        spaceAfter=10
+    )
+    elements.append(Paragraph("<b>BERITA ACARA SERAH TERIMA</b>", title_style))
     elements.append(Spacer(1, 10))
 
     # Header text
@@ -125,8 +132,8 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police, total_koli):
         <b>Police Number:</b> {police}<br/>
     """
 
-    # Total Koli Box
-    koli_style = ParagraphStyle("Koli", parent=styles["Normal"], alignment=1, fontSize=28)
+    # Improved TOTAL KOLI box
+    koli_style = ParagraphStyle("Koli", parent=styles["Normal"], alignment=1, fontSize=26)
     label_style = ParagraphStyle("Label", parent=styles["Normal"], alignment=1, fontSize=14)
 
     total_box = Table(
@@ -134,54 +141,74 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police, total_koli):
             [Paragraph("<b>TOTAL KOLI</b>", label_style)],
             [Paragraph(f"<b>{total_koli}</b>", koli_style)]
         ],
-        colWidths=[130]
+        colWidths=[180]
     )
     total_box.setStyle(TableStyle([
         ("BOX", (0,0), (-1,-1), 2, colors.black),
+        ("BACKGROUND", (0,0), (-1,0), colors.whitesmoke),
         ("ALIGN", (0,0), (-1,-1), "CENTER"),
         ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-        ("BACKGROUND", (0,0), (-1,0), colors.lightgrey)
+        ("TOPPADDING", (0,0), (-1,-1), 6),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 6)
     ]))
 
     page_width = A4[0] - (margin*2)
-    header_width = page_width - 130
+    header_width = page_width - 180
 
     header_table = Table([[Paragraph(header_left, styles["Normal"]), total_box]],
-                         colWidths=[header_width, 130])
+                         colWidths=[header_width, 180])
 
     elements.append(header_table)
     elements.append(Spacer(1, 15))
 
     # Clean DF
     df_clean = df.copy().fillna("")
-    if "TIMESTAMP" in df_clean.columns:
-        df_clean = df_clean.drop(columns=["TIMESTAMP"])
 
-    # TABLE FORMAT — tidy columns
+    # Exact column order:
+    expected_order = ["NO", "DELIVERY ORDER", "AIRWAYBILL", "STATE", "PROVIDER", "KOLI QTY"]
+    df_clean = df_clean[expected_order]
+
     header = list(df_clean.columns)
     data = df_clean.values.tolist()
 
-    # Adjust column widths — proportional layout
-    num_cols = len(header)
-    col_width = page_width / num_cols
-    col_widths = [col_width] * num_cols
+    # Custom width mapping (%)
+    column_width_percent = {
+        "NO": 0.05,
+        "DELIVERY ORDER": 0.20,
+        "AIRWAYBILL": 0.25,
+        "STATE": 0.10,
+        "PROVIDER": 0.20,
+        "KOLI QTY": 0.08
+    }
+
+    remaining_percent = 1.0 - sum(column_width_percent.get(col, 0) for col in header)
+    undefined_cols = [col for col in header if col not in column_width_percent]
+
+    col_widths = []
+    for col in header:
+        if col in column_width_percent:
+            col_widths.append(page_width * column_width_percent[col])
+        else:
+            col_widths.append(page_width * (remaining_percent / len(undefined_cols)))
 
     table = Table([header] + data, repeatRows=1, colWidths=col_widths)
     table.setStyle(TableStyle([
         ("BACKGROUND", (0,0), (-1,0), colors.darkgrey),
         ("TEXTCOLOR", (0,0), (-1,0), colors.whitesmoke),
         ("GRID", (0,0), (-1,-1), 0.4, colors.black),
-        ("FONTSIZE", (0,0), (-1,-1), 9),     # FONT 9
+        ("FONTSIZE", (0,0), (-1,-1), 9),
         ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
         ("ALIGN", (0,0), (-1,-1), "CENTER"),
         ("LEFTPADDING", (0,0), (-1,-1), 2),
-        ("RIGHTPADDING", (0,0), (-1,-1), 2)
+        ("RIGHTPADDING", (0,0), (-1,-1), 2),
+        ("TOPPADDING", (0,0), (-1,-1), 3),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 3)
     ]))
 
     elements.append(table)
-    elements.append(Spacer(1, 20))
+    elements.append(Spacer(1, 30))
 
-    # Signature
+    # Signature section
     sign = Table(
         [
             ["Diperiksa oleh", "Diserahkan oleh", "Diterima oleh"],
@@ -191,7 +218,10 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police, total_koli):
         ],
         colWidths=[page_width/3]*3
     )
-    sign.setStyle(TableStyle([("ALIGN", (0,0), (-1,-1), "CENTER")]))
+    sign.setStyle(TableStyle([
+        ("ALIGN", (0,0), (-1,-1), "CENTER"),
+        ("TOPPADDING", (0,0), (-1,-1), 6)
+    ]))
 
     elements.append(sign)
 
@@ -199,6 +229,8 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police, total_koli):
 
     buffer.seek(0)
     return buffer
+
+
 
 # -----------------------
 # Handle Upload

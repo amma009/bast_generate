@@ -133,22 +133,22 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police, total_koli):
     """
 
     # -----------------------
-    # FIXED TOTAL KOLI BOX
+    # TOTAL KOLI BOX
     # -----------------------
     koli_style = ParagraphStyle(
         "Koli",
         parent=styles["Normal"],
         alignment=1,
-        fontSize=22,
-        leading=24
+        fontSize=20,
+        leading=22
     )
 
     label_style = ParagraphStyle(
         "Label",
         parent=styles["Normal"],
         alignment=1,
-        fontSize=14,
-        leading=16
+        fontSize=12,
+        leading=14
     )
 
     total_box = Table(
@@ -156,8 +156,8 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police, total_koli):
             [Paragraph("<b>TOTAL KOLI</b>", label_style)],
             [Paragraph(f"<b>{total_koli}</b>", koli_style)]
         ],
-        colWidths=[180],
-        rowHeights=[30, 45]   # FIX: memastikan angka tidak keluar kotak
+        colWidths=[150],
+        rowHeights=[25, 35]
     )
 
     total_box.setStyle(TableStyle([
@@ -165,28 +165,28 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police, total_koli):
         ("BACKGROUND", (0,0), (-1,0), colors.whitesmoke),
         ("ALIGN", (0,0), (-1,-1), "CENTER"),
         ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-        ("TOPPADDING", (0,0), (-1,-1), 4),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 4)
+        ("TOPPADDING", (0,0), (-1,-1), 2),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 2)
     ]))
 
     page_width = A4[0] - (margin*2)
-    header_width = page_width - 180
+    header_width = page_width - 150
 
     header_table = Table([[Paragraph(header_left, styles["Normal"]), total_box]],
-                         colWidths=[header_width, 180])
+                         colWidths=[header_width, 150])
 
     elements.append(header_table)
-    elements.append(Spacer(1, 15))
+    elements.append(Spacer(1, 10))
 
     # Clean DF
     df_clean = df.copy().fillna("")
-
     expected_order = ["NO", "DELIVERY ORDER", "AIRWAYBILL", "STATE", "PROVIDER", "KOLI QTY"]
     df_clean = df_clean[expected_order]
 
     header = list(df_clean.columns)
     data = df_clean.values.tolist()
 
+    # Custom width mapping (%)
     column_width_percent = {
         "NO": 0.05,
         "DELIVERY ORDER": 0.20,
@@ -206,22 +206,26 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police, total_koli):
         else:
             col_widths.append(page_width * (remaining_percent / len(undefined_cols)))
 
+    # -----------------------
+    # TABLE DATA (COMPACT VERSION)
+    # -----------------------
     table = Table([header] + data, repeatRows=1, colWidths=col_widths)
+
     table.setStyle(TableStyle([
         ("BACKGROUND", (0,0), (-1,0), colors.darkgrey),
         ("TEXTCOLOR", (0,0), (-1,0), colors.whitesmoke),
-        ("GRID", (0,0), (-1,-1), 0.4, colors.black),
-        ("FONTSIZE", (0,0), (-1,-1), 9),
+        ("GRID", (0,0), (-1,-1), 0.3, colors.black),
+        ("FONTSIZE", (0,0), (-1,-1), 8),        # Font lebih kecil
         ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
         ("ALIGN", (0,0), (-1,-1), "CENTER"),
-        ("LEFTPADDING", (0,0), (-1,-1), 2),
-        ("RIGHTPADDING", (0,0), (-1,-1), 2),
-        ("TOPPADDING", (0,0), (-1,-1), 3),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 3)
+        ("LEFTPADDING", (0,0), (-1,-1), 1),    # Padding lebih kecil
+        ("RIGHTPADDING", (0,0), (-1,-1), 1),
+        ("TOPPADDING", (0,0), (-1,-1), 1),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 1)
     ]))
 
     elements.append(table)
-    elements.append(Spacer(1, 30))
+    elements.append(Spacer(1, 15))
 
     # Signature section
     sign = Table(
@@ -230,13 +234,13 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police, total_koli):
             ["", "", ""], ["", "", ""], ["", "", ""],
             ["__________________", "__________________", "__________________"],
             ["(Security WH)", "(Dispatcher WH)", "(Driver Courier)"],
-            ["* BAST Ini sebagai Bukti Bahwa Paket Sudah di Serahkan Dengan Kondisi Baik dan Kuantiti Koli yang Sesuai "]
+            ["* BAST ini sebagai bukti bahwa paket sudah diserahkan dengan kondisi baik dan jumlah koli sesuai."]
         ],
         colWidths=[page_width/3]*3
     )
     sign.setStyle(TableStyle([
         ("ALIGN", (0,0), (-1,-1), "CENTER"),
-        ("TOPPADDING", (0,0), (-1,-1), 6)
+        ("TOPPADDING", (0,0), (-1,-1), 4)
     ]))
 
     elements.append(sign)

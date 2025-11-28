@@ -132,24 +132,41 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police, total_koli):
         <b>Police Number:</b> {police}<br/>
     """
 
-    # Improved TOTAL KOLI box
-    koli_style = ParagraphStyle("Koli", parent=styles["Normal"], alignment=1, fontSize=26)
-    label_style = ParagraphStyle("Label", parent=styles["Normal"], alignment=1, fontSize=14)
+    # -----------------------
+    # FIXED TOTAL KOLI BOX
+    # -----------------------
+    koli_style = ParagraphStyle(
+        "Koli",
+        parent=styles["Normal"],
+        alignment=1,
+        fontSize=22,
+        leading=24
+    )
+
+    label_style = ParagraphStyle(
+        "Label",
+        parent=styles["Normal"],
+        alignment=1,
+        fontSize=14,
+        leading=16
+    )
 
     total_box = Table(
         [
             [Paragraph("<b>TOTAL KOLI</b>", label_style)],
             [Paragraph(f"<b>{total_koli}</b>", koli_style)]
         ],
-        colWidths=[180]
+        colWidths=[180],
+        rowHeights=[30, 45]   # FIX: memastikan angka tidak keluar kotak
     )
+
     total_box.setStyle(TableStyle([
         ("BOX", (0,0), (-1,-1), 2, colors.black),
         ("BACKGROUND", (0,0), (-1,0), colors.whitesmoke),
         ("ALIGN", (0,0), (-1,-1), "CENTER"),
         ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-        ("TOPPADDING", (0,0), (-1,-1), 6),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 6)
+        ("TOPPADDING", (0,0), (-1,-1), 4),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 4)
     ]))
 
     page_width = A4[0] - (margin*2)
@@ -164,14 +181,12 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police, total_koli):
     # Clean DF
     df_clean = df.copy().fillna("")
 
-    # Exact column order:
     expected_order = ["NO", "DELIVERY ORDER", "AIRWAYBILL", "STATE", "PROVIDER", "KOLI QTY"]
     df_clean = df_clean[expected_order]
 
     header = list(df_clean.columns)
     data = df_clean.values.tolist()
 
-    # Custom width mapping (%)
     column_width_percent = {
         "NO": 0.05,
         "DELIVERY ORDER": 0.20,
@@ -230,7 +245,6 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police, total_koli):
 
     buffer.seek(0)
     return buffer
-
 
 
 # -----------------------

@@ -9,7 +9,6 @@ from reportlab.lib.units import inch
 import io
 
 st.set_page_config(page_title="BAST Generator", layout="wide")
-
 st.title("📦 Berita Acara Serah Terima (BAST) Generator")
 
 # ========================
@@ -29,11 +28,10 @@ with col2:
     driver = st.text_input("Driver Name")
     police = st.text_input("Police Number")
 
-# gabungkan menjadi datetime
 tanggal = datetime.combine(tanggal_only, waktu_only)
 
 # ========================
-# VALIDASI HEADER SEBELUM UPLOAD
+# VALIDASI HEADER
 # ========================
 st.header("Upload Excel / CSV Data")
 
@@ -64,12 +62,10 @@ def validate_excel_file(df):
         errors.append("File kosong. Silakan upload file dengan data.")
         return False, errors
 
-    # cek kolom wajib
     missing_columns = [col for col in required_columns if col not in df.columns]
     if missing_columns:
-        errors.append(f"Kolom yang diperlukan tidak ditemukan: {', '.join(missing_columns)}")
+        errors.append(f"Kolom wajib tidak ada: {', '.join(missing_columns)}")
 
-    # cek nilai numerik
     if "KOLI QTY" in df.columns:
         if not all(df["KOLI QTY"].apply(lambda x: isinstance(x, (int, float)) or str(x).replace(".", "", 1).isdigit())):
             errors.append("Kolom 'KOLI QTY' harus berisi angka")
@@ -78,68 +74,35 @@ def validate_excel_file(df):
 
 
 # ========================
-# CANVAS PAGINATION FIX
+# 2-PASS PDF PAGINATION FIX
 # ========================
-from reportlab.pdfgen.canvas import Canvas
+def get_page_count(elements, pagesize):
+    buffer = io.BytesIO()
+    temp = SimpleDocTemplate(buffer, pagesize=pagesize)
+    temp.build(elements)
+    pdf_bytes = buffer.getvalue()
+    return pdf_bytes.count(b"/Type /Page")
 
-class NumberedCanvas(Canvas):
-    def __init__(self, *args, **kwargs):
-        self._total_pages = 0
-        super().__init__(*args, **kwargs)
 
-    def showPage(self):
-        self._total_pages += 1
-        super().showPage()
-
-    def save(self):
-        """Hitung total halaman lalu render ulang"""
-        total_pages = self._total_pages
-        self._pageNumber = 0
-
-        super().saveState()
-        self._startPage()
-
-        for page in range(1, total_pages + 1):
-            self.setPageSize(A4)
-            self.draw_page_number(page, total_pages)
-            super().showPage()
-
-        super().restoreState()
-        super().save()
-
-    def draw_page_number(self, page, total):
-        page_text = f"{page}/{total}"
-        self.setFont("Helvetica", 9)
-        self.drawString(A4[0] - 80, 0.5 * inch, page_text)
+def add_page_number(canvas, doc, total_pages):
+    page = canvas.getPageNumber()
+    footer = f"{page}/{total_pages}"
+    canvas.setFont("Helvetica", 9)
+    canvas.drawRightString(A4[0] - 40, 0.5 * inch, footer)
 
 
 # ========================
 # GENERATE PDF
 # ========================
 def generate_pdf(df, tanggal, warehouse, courier, driver, police, total_koli):
-    buffer = io.BytesIO()
-
-    pdf = SimpleDocTemplate(
-        buffer,
-        pagesize=A4,
-        topMargin=0.5 * inch,
-        bottomMargin=0.5 * inch,
-        leftMargin=0.5 * inch,
-        rightMargin=0.5 * inch
-    )
-
     styles = getSampleStyleSheet()
     elements = []
 
-    # ========================
     # JUDUL
-    # ========================
     elements.append(Paragraph("<b>BERITA ACARA SERAH TERIMA</b>", styles["Title"]))
     elements.append(Spacer(1, 10))
 
-    # ========================
     # HEADER KIRI
-    # ========================
     header_left = f"""
     <b>Tanggal:</b> {tanggal.strftime('%d/%m/%Y %H:%M')}<br/>
     <b>Warehouse:</b> {warehouse}<br/>
@@ -148,22 +111,9 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police, total_koli):
     <b>Police Number:</b> {police}<br/>
     """
 
-    # ========================
-    # TOTAL KOLI BOX (36px)
-    # ========================
-    koli_style = ParagraphStyle(
-        "KoliStyle",
-        parent=styles["Normal"],
-        alignment=1,
-        fontSize=36,
-        leading=40
-    )
-    label_style = ParagraphStyle(
-        "LabelStyle",
-        parent=styles["Normal"],
-        alignment=1,
-        fontSize=16
-    )
+    # TOTAL KOLI BOX
+    koli_style = ParagraphStyle("KoliStyle", parent=styles["Normal"], alignment=1, fontSize=36, leading=40)
+    label_style = ParagraphStyle("LabelStyle", parent=styles["Normal"], alignment=1, fontSize=16)
 
     total_koli_box = Table(
         [
@@ -172,12 +122,10 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police, total_koli):
         ],
         colWidths=[140]
     )
-
     total_koli_box.setStyle(TableStyle([
         ("BOX", (0, 0), (-1, -1), 2, colors.black),
-        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
     ]))
 
     header_table = Table([[Paragraph(header_left, styles["Normal"]), total_koli_box]],
@@ -185,12 +133,9 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police, total_koli):
     elements.append(header_table)
     elements.append(Spacer(1, 15))
 
-    # ========================
     # TABEL DATA
-    # ========================
     table_data = [list(df.columns)] + df.values.tolist()
     table = Table(table_data, repeatRows=1)
-
     table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
@@ -198,13 +143,10 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police, total_koli):
         ("GRID", (0, 0), (-1, -1), 1, colors.black),
         ("FONTSIZE", (0, 0), (-1, -1), 8),
     ]))
-
     elements.append(table)
     elements.append(Spacer(1, 20))
 
-    # ========================
     # TANDA TANGAN
-    # ========================
     signature_table = Table(
         [
             ["Diperiksa oleh", "Diserahkan oleh", "Diterima oleh"],
@@ -214,16 +156,29 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police, total_koli):
         ],
         colWidths=[180, 180, 180],
     )
-
     signature_table.setStyle(TableStyle([
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, 0), 11),
     ]))
-
     elements.append(signature_table)
 
-    pdf.build(elements, canvasmaker=NumberedCanvas)
+    # Pass 1 → hitung jumlah halaman
+    total_pages = get_page_count(elements, A4)
+
+    # Pass 2 → generate PDF final
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4,
+        topMargin=0.5 * inch, bottomMargin=0.5 * inch,
+        leftMargin=0.5 * inch, rightMargin=0.5 * inch
+    )
+
+    def page_first(canvas, doc):
+        add_page_number(canvas, doc, total_pages)
+
+    def page_later(canvas, doc):
+        add_page_number(canvas, doc, total_pages)
+
+    doc.build(elements, onFirstPage=page_first, onLaterPages=page_later)
 
     buffer.seek(0)
     return buffer
@@ -234,7 +189,6 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police, total_koli):
 # ========================
 if uploaded_file:
 
-    # baca file → bisa Excel atau CSV
     if uploaded_file.name.endswith(".csv"):
         df = pd.read_csv(uploaded_file)
     else:
@@ -244,8 +198,8 @@ if uploaded_file:
 
     if not is_valid:
         st.error("❌ Validasi gagal:")
-        for err in errors:
-            st.error("• " + err)
+        for e in errors:
+            st.error("• " + e)
     else:
         total_koli = int(df["KOLI QTY"].sum())
 

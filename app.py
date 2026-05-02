@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, time
+from datetime import datetime
 from io import StringIO
 import io
 import re
@@ -10,8 +10,7 @@ from reportlab.platypus import (
     Table,
     TableStyle,
     Paragraph,
-    Spacer,
-    PageBreak
+    Spacer
 )
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -64,10 +63,7 @@ st.header("Paste Data")
 
 raw_text = st.text_area(
     "Copy dari Excel lalu paste di sini",
-    height=300,
-    placeholder="""NO\tDELIVERY ORDER\tAIRWAYBILL\tSTATE\tPROVIDER\tKOLI QTY
-1\tDO001\tAWB001\tJKT\tJNE\t2
-2\tDO002\tAWB002\tBDG\tSICEPAT\t1"""
+    height=300
 )
 
 # ==================================================
@@ -114,7 +110,7 @@ def validate_file(df):
 
 
 # ==================================================
-# 🔥 FIX ENTER DALAM CELL (TAMBAHAN SAJA)
+# FIX ENTER DALAM CELL
 # ==================================================
 def fix_broken_rows(text):
     lines = text.replace("\r", "").split("\n")
@@ -123,7 +119,6 @@ def fix_broken_rows(text):
     for line in lines:
         line = line.strip()
 
-        # jika hanya angka → gabungkan ke baris sebelumnya
         if line.isdigit() and fixed_lines:
             fixed_lines[-1] += "\t" + line
         else:
@@ -181,6 +176,7 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police):
     styles = getSampleStyleSheet()
     elements = []
 
+    # TITLE
     title_style = ParagraphStyle(
         "title",
         parent=styles["Title"],
@@ -193,6 +189,7 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police):
         Paragraph("<b>BERITA ACARA SERAH TERIMA</b>", title_style)
     )
 
+    # HEADER
     total_koli = int(
         pd.to_numeric(df["KOLI QTY"], errors="coerce")
         .fillna(0)
@@ -223,18 +220,21 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police):
         fontSize=22
     )
 
+    # TOTAL KOLI (FIXED)
     total_box = Table(
         [
             [Paragraph("<b>TOTAL KOLI</b>", label_style)],
             [Paragraph(f"<b>{total_koli}</b>", big_style)]
         ],
-        colWidths=[140]
+        colWidths=[140],
+        rowHeights=[25, 45]
     )
 
     total_box.setStyle(TableStyle([
         ("BOX", (0, 0), (-1, -1), 1.5, colors.black),
         ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
-        ("ALIGN", (0, 0), (-1, -1), "CENTER")
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
     ]))
 
     header_table = Table(
@@ -245,6 +245,7 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police):
     elements.append(header_table)
     elements.append(Spacer(1, 12))
 
+    # TABLE DATA
     expected = [
         "NO",
         "DELIVERY ORDER",
@@ -255,19 +256,9 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police):
     ]
 
     df = df[expected].fillna("")
-
     data = [list(df.columns)] + df.values.tolist()
 
-    widths = [
-        page_width * 0.06,
-        page_width * 0.22,
-        page_width * 0.28,
-        page_width * 0.12,
-        page_width * 0.20,
-        page_width * 0.12
-    ]
-
-    table = Table(data, repeatRows=1, colWidths=widths)
+    table = Table(data, repeatRows=1)
 
     table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1F4E78")),
@@ -275,10 +266,48 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police):
         ("GRID", (0, 0), (-1, -1), 0.4, colors.black),
         ("FONTSIZE", (0, 0), (-1, -1), 8),
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
     ]))
 
     elements.append(table)
+
+    # SIGNATURE
+    elements.append(Spacer(1, 25))
+
+    note_style = ParagraphStyle(
+        "note",
+        parent=styles["Normal"],
+        alignment=1,
+        fontSize=8
+    )
+
+    sign = Table(
+        [
+            ["Diperiksa oleh", "Diserahkan oleh", "Diterima oleh"],
+            ["", "", ""],
+            ["", "", ""],
+            ["", "", ""],
+            ["", "", ""],
+            ["__________________", "__________________", "__________________"],
+            ["(Security WH)", "(Dispatcher WH)", "(Driver Courier)"],
+            [
+                Paragraph(
+                    "* BAST ini sebagai bukti bahwa paket sudah diserahkan "
+                    "dengan kondisi baik dan jumlah koli sesuai.",
+                    note_style
+                ),
+                "",
+                ""
+            ]
+        ],
+        colWidths=[page_width / 3] * 3
+    )
+
+    sign.setStyle(TableStyle([
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("SPAN", (0, 7), (2, 7)),
+    ]))
+
+    elements.append(sign)
 
     doc.build(elements, canvasmaker=NumberedCanvas)
 
@@ -291,9 +320,7 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police):
 # ==================================================
 if raw_text.strip():
 
-    # 🔥 PAKAI FIX DI SINI
     cleaned = fix_broken_rows(raw_text)
-
     df = parse_paste_data(cleaned)
 
     valid, errors = validate_file(df)
@@ -304,7 +331,7 @@ if raw_text.strip():
 
     else:
         st.success("Data berhasil dibaca.")
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(df)
 
         total_koli = int(
             pd.to_numeric(df["KOLI QTY"], errors="coerce")
@@ -325,13 +352,7 @@ if raw_text.strip():
                 police
             )
 
-            fname = (
-                f"BAST_"
-                f"{safe_filename(warehouse)}_"
-                f"{safe_filename(courier)}_"
-                f"{safe_filename(police)}_"
-                f"{tanggal.strftime('%Y%m%d_%H%M%S')}.pdf"
-            )
+            fname = f"BAST_{tanggal.strftime('%Y%m%d_%H%M%S')}.pdf"
 
             st.download_button(
                 "📥 Download PDF",

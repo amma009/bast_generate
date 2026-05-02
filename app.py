@@ -82,7 +82,6 @@ def parse_paste_data(text):
         return None
 
     try:
-        # Detect tab (Excel copy paste)
         if "\t" in text:
             df = pd.read_csv(StringIO(text), sep="\t")
         else:
@@ -112,6 +111,25 @@ def validate_file(df):
             errors.append(f"Kolom wajib tidak ada: {col}")
 
     return len(errors) == 0, errors
+
+
+# ==================================================
+# 🔥 FIX ENTER DALAM CELL (TAMBAHAN SAJA)
+# ==================================================
+def fix_broken_rows(text):
+    lines = text.replace("\r", "").split("\n")
+    fixed_lines = []
+
+    for line in lines:
+        line = line.strip()
+
+        # jika hanya angka → gabungkan ke baris sebelumnya
+        if line.isdigit() and fixed_lines:
+            fixed_lines[-1] += "\t" + line
+        else:
+            fixed_lines.append(line)
+
+    return "\n".join(fixed_lines)
 
 
 # ==================================================
@@ -163,7 +181,6 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police):
     styles = getSampleStyleSheet()
     elements = []
 
-    # ---------------- TITLE ----------------
     title_style = ParagraphStyle(
         "title",
         parent=styles["Title"],
@@ -176,7 +193,6 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police):
         Paragraph("<b>BERITA ACARA SERAH TERIMA</b>", title_style)
     )
 
-    # ---------------- HEADER ----------------
     total_koli = int(
         pd.to_numeric(df["KOLI QTY"], errors="coerce")
         .fillna(0)
@@ -229,7 +245,6 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police):
     elements.append(header_table)
     elements.append(Spacer(1, 12))
 
-    # ---------------- DATA TABLE ----------------
     expected = [
         "NO",
         "DELIVERY ORDER",
@@ -261,52 +276,9 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police):
         ("FONTSIZE", (0, 0), (-1, -1), 8),
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 2),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 2),
-        ("TOPPADDING", (0, 0), (-1, -1), 2),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2)
     ]))
 
     elements.append(table)
-
-    # ---------------- SIGNATURE ----------------
-    elements.append(Spacer(1, 20))
-
-    note_style = ParagraphStyle(
-        "note",
-        parent=styles["Normal"],
-        alignment=1,
-        fontSize=8
-    )
-
-    sign = Table(
-        [
-            ["Diperiksa oleh", "Diserahkan oleh", "Diterima oleh"],
-            ["", "", ""],
-            ["", "", ""],
-            ["", "", ""],
-            ["__________________", "__________________", "__________________"],
-            ["(Security WH)", "(Dispatcher WH)", "(Driver Courier)"],
-            [
-                Paragraph(
-                    "* BAST ini sebagai bukti bahwa paket sudah diserahkan "
-                    "dengan kondisi baik dan jumlah koli sesuai.",
-                    note_style
-                ),
-                "",
-                ""
-            ]
-        ],
-        colWidths=[page_width / 3] * 3
-    )
-
-    sign.setStyle(TableStyle([
-        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("SPAN", (0, 6), (2, 6)),
-        ("TOPPADDING", (0, 0), (-1, -1), 4)
-    ]))
-
-    elements.append(sign)
 
     doc.build(elements, canvasmaker=NumberedCanvas)
 
@@ -319,7 +291,10 @@ def generate_pdf(df, tanggal, warehouse, courier, driver, police):
 # ==================================================
 if raw_text.strip():
 
-    df = parse_paste_data(raw_text)
+    # 🔥 PAKAI FIX DI SINI
+    cleaned = fix_broken_rows(raw_text)
+
+    df = parse_paste_data(cleaned)
 
     valid, errors = validate_file(df)
 

@@ -16,36 +16,35 @@ from reportlab.platypus import (
     Spacer,
     Image as RLImage
 )
-
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas
 
-from streamlit_drawable_canvas import st_canvas
 
-
-# ==================================================
+# ============================================================
 # CONFIG
-# ==================================================
+# ============================================================
 
 st.set_page_config(
     page_title="BAST Generator",
+    page_icon="📦",
     layout="wide"
 )
 
 st.title("📦 BAST Generator")
 st.caption(
-    "Copy data dari Excel, isi 3 nama, lalu buat tanda tangan langsung."
+    "Copy data dari Excel, isi data BAST, lalu buat 3 tanda tangan "
+    "langsung menggunakan mouse atau jari."
 )
 
 
-# ==================================================
+# ============================================================
 # HEADER INPUT
-# ==================================================
+# ============================================================
 
-st.header("Input Header")
+st.header("📋 Input Header")
 
 col1, col2 = st.columns(2)
 
@@ -53,15 +52,17 @@ with col1:
 
     tanggal_only = st.date_input(
         "Tanggal",
-        datetime.now().date()
+        value=datetime.now().date()
     )
 
     warehouse = st.text_input(
-        "Warehouse"
+        "Warehouse",
+        placeholder="Contoh: WH Jakarta"
     )
 
     courier = st.text_input(
-        "Courier Name"
+        "Courier Name",
+        placeholder="Nama courier"
     )
 
 
@@ -73,11 +74,13 @@ with col2:
     )
 
     driver = st.text_input(
-        "Driver Name"
+        "Driver Name",
+        placeholder="Nama driver"
     )
 
     police = st.text_input(
-        "Police Number"
+        "Police Number",
+        placeholder="Nomor kendaraan"
     )
 
 
@@ -99,21 +102,25 @@ tanggal = make_datetime(
 )
 
 
-# ==================================================
+# ============================================================
 # PASTE DATA
-# ==================================================
+# ============================================================
 
-st.header("Paste Data")
+st.header("📊 Paste Data")
 
 raw_text = st.text_area(
-    "Copy dari Excel lalu paste di sini",
-    height=300
+    "Copy data dari Excel lalu paste di sini",
+    height=300,
+    placeholder=(
+        "NO\tDELIVERY ORDER\tAIRWAYBILL\tSTATE\tPROVIDER\tKOLI QTY\n"
+        "1\tDO001\tAWB001\tDELIVERED\tJNE\t2"
+    )
 )
 
 
-# ==================================================
+# ============================================================
 # SIGNATURE INPUT
-# ==================================================
+# ============================================================
 
 st.header("✍️ Tanda Tangan")
 
@@ -123,9 +130,9 @@ st.info(
 )
 
 
-# ==================================================
+# ============================================================
 # NAMA SIGNER
-# ==================================================
+# ============================================================
 
 sig_col1, sig_col2, sig_col3 = st.columns(3)
 
@@ -137,7 +144,8 @@ with sig_col1:
 
     security_name = st.text_input(
         "Nama Security",
-        key="security_name"
+        key="security_name",
+        placeholder="Nama Security"
     )
 
 
@@ -148,7 +156,8 @@ with sig_col2:
 
     dispatcher_name = st.text_input(
         "Nama Dispatcher",
-        key="dispatcher_name"
+        key="dispatcher_name",
+        placeholder="Nama Dispatcher"
     )
 
 
@@ -159,16 +168,16 @@ with sig_col3:
 
     driver_name = st.text_input(
         "Nama Driver Courier",
-        key="driver_courier_name"
+        key="driver_courier_name",
+        placeholder="Nama Driver"
     )
 
 
-# ==================================================
+# ============================================================
 # CANVAS SIGNATURE
-# ==================================================
+# ============================================================
 
-st.subheader("Gambar Tanda Tangan")
-
+st.subheader("🖊️ Gambar Tanda Tangan")
 
 canvas_col1, canvas_col2, canvas_col3 = st.columns(3)
 
@@ -224,9 +233,9 @@ with canvas_col3:
     )
 
 
-# ==================================================
+# ============================================================
 # FUNCTIONS
-# ==================================================
+# ============================================================
 
 def safe_filename(text):
 
@@ -237,13 +246,18 @@ def safe_filename(text):
     )
 
 
+# ============================================================
+# PARSE DATA
+# ============================================================
+
 def parse_paste_data(text):
 
-    if not text.strip():
+    if not text or not text.strip():
         return None
 
     try:
 
+        # Excel copy biasanya menggunakan TAB
         if "\t" in text:
 
             df = pd.read_csv(
@@ -257,22 +271,42 @@ def parse_paste_data(text):
                 StringIO(text)
             )
 
+        # Bersihkan nama kolom
+        df.columns = [
+            str(col).strip()
+            for col in df.columns
+        ]
+
         return df
 
-    except:
+    except Exception:
 
         return None
 
+
+# ============================================================
+# VALIDATE DATA
+# ============================================================
 
 def validate_file(df):
 
     errors = []
 
-    if df is None or df.empty:
+    if df is None:
+
+        errors.append(
+            "Data tidak dapat dibaca."
+        )
+
+        return False, errors
+
+
+    if df.empty:
 
         errors.append(
             "Data kosong."
         )
+
 
     required = [
         "NO",
@@ -283,22 +317,22 @@ def validate_file(df):
         "KOLI QTY"
     ]
 
-    if df is not None:
 
-        for col in required:
+    for col in required:
 
-            if col not in df.columns:
+        if col not in df.columns:
 
-                errors.append(
-                    f"Kolom wajib tidak ada: {col}"
-                )
+            errors.append(
+                f"Kolom wajib tidak ada: {col}"
+            )
+
 
     return len(errors) == 0, errors
 
 
-# ==================================================
-# FIX ENTER DALAM CELL
-# ==================================================
+# ============================================================
+# FIX BROKEN ROWS
+# ============================================================
 
 def fix_broken_rows(text):
 
@@ -314,6 +348,11 @@ def fix_broken_rows(text):
 
         line = line.strip()
 
+        if not line:
+            continue
+
+        # Jika hanya angka dan ada baris sebelumnya,
+        # dianggap bagian dari KOLI QTY
         if line.isdigit() and fixed_lines:
 
             fixed_lines[-1] += "\t" + line
@@ -325,9 +364,78 @@ def fix_broken_rows(text):
     return "\n".join(fixed_lines)
 
 
-# ==================================================
-# PAGE NUMBER
-# ==================================================
+# ============================================================
+# CANVAS TO PNG
+# ============================================================
+
+def canvas_to_png(canvas_result):
+
+    if canvas_result is None:
+        return None
+
+    if canvas_result.image_data is None:
+        return None
+
+    try:
+
+        image = Image.fromarray(
+            canvas_result.image_data.astype("uint8")
+        )
+
+        image = image.convert("RGBA")
+
+        output = io.BytesIO()
+
+        image.save(
+            output,
+            format="PNG"
+        )
+
+        output.seek(0)
+
+        return output
+
+    except Exception:
+
+        return None
+
+
+# ============================================================
+# CHECK SIGNATURE EMPTY
+# ============================================================
+
+def signature_exists(canvas_result):
+
+    if canvas_result is None:
+        return False
+
+    if canvas_result.image_data is None:
+        return False
+
+    try:
+
+        image_data = canvas_result.image_data
+
+        # Background canvas putih.
+        # Cek apakah ada pixel yang bukan putih.
+        rgb = image_data[:, :, :3]
+
+        non_white = (
+            (rgb[:, :, 0] < 245)
+            | (rgb[:, :, 1] < 245)
+            | (rgb[:, :, 2] < 245)
+        )
+
+        return bool(non_white.any())
+
+    except Exception:
+
+        return False
+
+
+# ============================================================
+# PAGE NUMBER CANVAS
+# ============================================================
 
 class NumberedCanvas(canvas.Canvas):
 
@@ -387,40 +495,9 @@ class NumberedCanvas(canvas.Canvas):
         )
 
 
-# ==================================================
-# CONVERT CANVAS TO PNG
-# ==================================================
-
-def canvas_to_png(canvas_result):
-
-    if canvas_result is None:
-        return None
-
-    if canvas_result.image_data is None:
-        return None
-
-    image = Image.fromarray(
-        canvas_result.image_data.astype("uint8")
-    )
-
-    # Pastikan RGBA
-    image = image.convert("RGBA")
-
-    output = io.BytesIO()
-
-    image.save(
-        output,
-        format="PNG"
-    )
-
-    output.seek(0)
-
-    return output
-
-
-# ==================================================
+# ============================================================
 # PDF GENERATOR
-# ==================================================
+# ============================================================
 
 def generate_pdf(
     df,
@@ -442,9 +519,13 @@ def generate_pdf(
     margin = 0.5 * inch
 
     page_width = (
-        A4[0]
-        - (margin * 2)
+        A4[0] - (margin * 2)
     )
+
+
+    # ========================================================
+    # DOCUMENT
+    # ========================================================
 
     doc = SimpleDocTemplate(
         buffer,
@@ -461,9 +542,9 @@ def generate_pdf(
     elements = []
 
 
-    # ==================================================
+    # ========================================================
     # TITLE
-    # ==================================================
+    # ========================================================
 
     title_style = ParagraphStyle(
         "title",
@@ -482,9 +563,14 @@ def generate_pdf(
     )
 
 
-    # ==================================================
-    # HEADER
-    # ==================================================
+    elements.append(
+        Spacer(1, 5)
+    )
+
+
+    # ========================================================
+    # TOTAL KOLI
+    # ========================================================
 
     total_koli = int(
         pd.to_numeric(
@@ -496,6 +582,10 @@ def generate_pdf(
     )
 
 
+    # ========================================================
+    # HEADER
+    # ========================================================
+
     tanggal_str = tanggal.strftime(
         "%d/%m/%Y %H:%M:%S"
     )
@@ -506,7 +596,7 @@ def generate_pdf(
     <b>Warehouse:</b> {warehouse}<br/>
     <b>Courier Name:</b> {courier}<br/>
     <b>Driver Name:</b> {driver}<br/>
-    <b>Police Number:</b> {police}<br/>
+    <b>Police Number:</b> {police}
     """
 
 
@@ -514,7 +604,7 @@ def generate_pdf(
         "label",
         parent=styles["Normal"],
         alignment=1,
-        fontSize=11
+        fontSize=10
     )
 
 
@@ -522,7 +612,7 @@ def generate_pdf(
         "big",
         parent=styles["Normal"],
         alignment=1,
-        fontSize=22
+        fontSize=20
     )
 
 
@@ -541,7 +631,7 @@ def generate_pdf(
                 )
             ]
         ],
-        colWidths=[140],
+        colWidths=[130],
         rowHeights=[25, 45]
     )
 
@@ -587,13 +677,26 @@ def generate_pdf(
                     header_text,
                     styles["Normal"]
                 ),
+
                 total_box
             ]
         ],
         colWidths=[
-            page_width - 140,
-            140
+            page_width - 130,
+            130
         ]
+    )
+
+
+    header_table.setStyle(
+        TableStyle([
+            (
+                "VALIGN",
+                (0, 0),
+                (-1, -1),
+                "MIDDLE"
+            )
+        ])
     )
 
 
@@ -601,14 +704,15 @@ def generate_pdf(
         header_table
     )
 
+
     elements.append(
         Spacer(1, 12)
     )
 
 
-    # ==================================================
-    # TABLE DATA
-    # ==================================================
+    # ========================================================
+    # DATA TABLE
+    # ========================================================
 
     expected = [
         "NO",
@@ -620,14 +724,18 @@ def generate_pdf(
     ]
 
 
-    df = df[
+    df_pdf = df[
         expected
     ].fillna("")
 
 
+    # Convert semua nilai menjadi string
+    df_pdf = df_pdf.astype(str)
+
+
     data = [
-        list(df.columns)
-    ] + df.values.tolist()
+        list(df_pdf.columns)
+    ] + df_pdf.values.tolist()
 
 
     table = Table(
@@ -643,9 +751,7 @@ def generate_pdf(
                 "BACKGROUND",
                 (0, 0),
                 (-1, 0),
-                colors.HexColor(
-                    "#1F4E78"
-                )
+                colors.HexColor("#1F4E78")
             ),
 
             (
@@ -667,7 +773,7 @@ def generate_pdf(
                 "FONTSIZE",
                 (0, 0),
                 (-1, -1),
-                8
+                7
             ),
 
             (
@@ -675,8 +781,28 @@ def generate_pdf(
                 (0, 0),
                 (-1, -1),
                 "CENTER"
-            )
+            ),
 
+            (
+                "VALIGN",
+                (0, 0),
+                (-1, -1),
+                "MIDDLE"
+            ),
+
+            (
+                "TOPPADDING",
+                (0, 0),
+                (-1, -1),
+                4
+            ),
+
+            (
+                "BOTTOMPADDING",
+                (0, 0),
+                (-1, -1),
+                4
+            )
         ])
     )
 
@@ -686,9 +812,9 @@ def generate_pdf(
     )
 
 
-    # ==================================================
+    # ========================================================
     # SIGNATURE
-    # ==================================================
+    # ========================================================
 
     elements.append(
         Spacer(1, 25)
@@ -703,12 +829,25 @@ def generate_pdf(
     )
 
 
-    signature_cells = []
+    signature_name_style = ParagraphStyle(
+        "signature_name",
+        parent=styles["Normal"],
+        alignment=1,
+        fontSize=9
+    )
 
 
-    # --------------------------------------------------
-    # SECURITY
-    # --------------------------------------------------
+    role_style = ParagraphStyle(
+        "role",
+        parent=styles["Normal"],
+        alignment=1,
+        fontSize=8
+    )
+
+
+    # ========================================================
+    # SECURITY SIGNATURE
+    # ========================================================
 
     if security_signature is not None:
 
@@ -720,30 +859,30 @@ def generate_pdf(
 
     else:
 
-        security_img = Paragraph(
-            "<br/><br/><br/>",
-            styles["Normal"]
+        security_img = Spacer(
+            1,
+            60
         )
 
 
     security_cell = [
         security_img,
+
         Paragraph(
-            f"<b>{security_name}</b>"
-            if security_name
-            else " ",
-            styles["Normal"]
+            f"<b>{security_name}</b>",
+            signature_name_style
         ),
+
         Paragraph(
             "(Security WH)",
-            styles["Normal"]
+            role_style
         )
     ]
 
 
-    # --------------------------------------------------
-    # DISPATCHER
-    # --------------------------------------------------
+    # ========================================================
+    # DISPATCHER SIGNATURE
+    # ========================================================
 
     if dispatcher_signature is not None:
 
@@ -755,30 +894,30 @@ def generate_pdf(
 
     else:
 
-        dispatcher_img = Paragraph(
-            "<br/><br/><br/>",
-            styles["Normal"]
+        dispatcher_img = Spacer(
+            1,
+            60
         )
 
 
     dispatcher_cell = [
         dispatcher_img,
+
         Paragraph(
-            f"<b>{dispatcher_name}</b>"
-            if dispatcher_name
-            else " ",
-            styles["Normal"]
+            f"<b>{dispatcher_name}</b>",
+            signature_name_style
         ),
+
         Paragraph(
             "(Dispatcher WH)",
-            styles["Normal"]
+            role_style
         )
     ]
 
 
-    # --------------------------------------------------
-    # DRIVER
-    # --------------------------------------------------
+    # ========================================================
+    # DRIVER SIGNATURE
+    # ========================================================
 
     if driver_signature is not None:
 
@@ -790,30 +929,30 @@ def generate_pdf(
 
     else:
 
-        driver_img = Paragraph(
-            "<br/><br/><br/>",
-            styles["Normal"]
+        driver_img = Spacer(
+            1,
+            60
         )
 
 
     driver_cell = [
         driver_img,
+
         Paragraph(
-            f"<b>{driver_name}</b>"
-            if driver_name
-            else " ",
-            styles["Normal"]
+            f"<b>{driver_name}</b>",
+            signature_name_style
         ),
+
         Paragraph(
             "(Driver Courier)",
-            styles["Normal"]
+            role_style
         )
     ]
 
 
-    # ==================================================
+    # ========================================================
     # SIGNATURE TABLE
-    # ==================================================
+    # ========================================================
 
     sign = Table(
         [
@@ -841,18 +980,9 @@ def generate_pdf(
             ],
 
             [
-                Paragraph(
-                    "<br/>",
-                    styles["Normal"]
-                ),
-                Paragraph(
-                    "<br/>",
-                    styles["Normal"]
-                ),
-                Paragraph(
-                    "<br/>",
-                    styles["Normal"]
-                )
+                "",
+                "",
+                ""
             ],
 
             [
@@ -862,10 +992,12 @@ def generate_pdf(
                     "dan jumlah koli sesuai.",
                     note_style
                 ),
+
                 "",
                 ""
             ]
         ],
+
         colWidths=[
             page_width / 3
         ] * 3
@@ -890,11 +1022,48 @@ def generate_pdf(
             ),
 
             (
+                "LINEBELOW",
+                (0, 1),
+                (0, 1),
+                0.5,
+                colors.black
+            ),
+
+            (
+                "LINEBELOW",
+                (1, 1),
+                (1, 1),
+                0.5,
+                colors.black
+            ),
+
+            (
+                "LINEBELOW",
+                (2, 1),
+                (2, 1),
+                0.5,
+                colors.black
+            ),
+
+            (
                 "SPAN",
                 (0, 3),
                 (2, 3)
-            )
+            ),
 
+            (
+                "TOPPADDING",
+                (0, 0),
+                (-1, -1),
+                5
+            ),
+
+            (
+                "BOTTOMPADDING",
+                (0, 0),
+                (-1, -1),
+                5
+            )
         ])
     )
 
@@ -904,9 +1073,9 @@ def generate_pdf(
     )
 
 
-    # ==================================================
-    # BUILD
-    # ==================================================
+    # ========================================================
+    # BUILD PDF
+    # ========================================================
 
     doc.build(
         elements,
@@ -919,15 +1088,16 @@ def generate_pdf(
     return buffer
 
 
-# ==================================================
-# PROCESS
-# ==================================================
+# ============================================================
+# PROCESS DATA
+# ============================================================
 
 if raw_text.strip():
 
     cleaned = fix_broken_rows(
         raw_text
     )
+
 
     df = parse_paste_data(
         cleaned
@@ -941,22 +1111,33 @@ if raw_text.strip():
 
     if not valid:
 
-        for e in errors:
+        for error in errors:
 
-            st.error(e)
+            st.error(error)
 
 
     else:
 
         st.success(
-            "Data berhasil dibaca."
+            "✅ Data berhasil dibaca."
         )
 
+
+        # ====================================================
+        # DATA PREVIEW
+        # ====================================================
+
+        st.subheader("Preview Data")
 
         st.dataframe(
-            df
+            df,
+            use_container_width=True
         )
 
+
+        # ====================================================
+        # TOTAL KOLI
+        # ====================================================
 
         total_koli = int(
             pd.to_numeric(
@@ -969,43 +1150,92 @@ if raw_text.strip():
 
 
         st.info(
-            f"TOTAL KOLI: {total_koli}"
+            f"📦 TOTAL KOLI: {total_koli}"
         )
 
 
-        # ==================================================
+        # ====================================================
         # VALIDASI NAMA
-        # ==================================================
+        # ====================================================
 
         names_ready = (
-            security_name.strip()
-            and dispatcher_name.strip()
-            and driver_name.strip()
+            bool(security_name.strip())
+            and bool(dispatcher_name.strip())
+            and bool(driver_name.strip())
         )
 
 
-        # ==================================================
-        # GENERATE
-        # ==================================================
+        # ====================================================
+        # GENERATE BUTTON
+        # ====================================================
 
         if st.button(
             "📄 Generate PDF",
-            type="primary"
+            type="primary",
+            use_container_width=True
         ):
+
+            # -----------------------------------------------
+            # VALIDASI NAMA
+            # -----------------------------------------------
 
             if not names_ready:
 
                 st.error(
-                    "Nama Security, Dispatcher, "
-                    "dan Driver Courier wajib diisi."
+                    "Nama Security, Dispatcher, dan "
+                    "Driver Courier wajib diisi."
                 )
 
                 st.stop()
 
 
-            # ----------------------------------------------
+            # -----------------------------------------------
+            # VALIDASI SIGNATURE
+            # -----------------------------------------------
+
+            security_exists = signature_exists(
+                security_canvas
+            )
+
+            dispatcher_exists = signature_exists(
+                dispatcher_canvas
+            )
+
+            driver_exists = signature_exists(
+                driver_canvas
+            )
+
+
+            if not security_exists:
+
+                st.error(
+                    "✍️ Tanda tangan Security WH belum dibuat."
+                )
+
+                st.stop()
+
+
+            if not dispatcher_exists:
+
+                st.error(
+                    "✍️ Tanda tangan Dispatcher WH belum dibuat."
+                )
+
+                st.stop()
+
+
+            if not driver_exists:
+
+                st.error(
+                    "✍️ Tanda tangan Driver Courier belum dibuat."
+                )
+
+                st.stop()
+
+
+            # -----------------------------------------------
             # CONVERT SIGNATURE
-            # ----------------------------------------------
+            # -----------------------------------------------
 
             security_signature = canvas_to_png(
                 security_canvas
@@ -1020,60 +1250,61 @@ if raw_text.strip():
             )
 
 
-            # ----------------------------------------------
-            # VALIDATE SIGNATURE
-            # ----------------------------------------------
+            # -----------------------------------------------
+            # GENERATE PDF
+            # -----------------------------------------------
 
-            if (
-                security_signature is None
-                or dispatcher_signature is None
-                or driver_signature is None
+            with st.spinner(
+                "Sedang membuat PDF..."
             ):
 
-                st.error(
-                    "Ketiga tanda tangan wajib dibuat "
-                    "sebelum Generate PDF."
+                pdf = generate_pdf(
+                    df=df,
+                    tanggal=tanggal,
+                    warehouse=warehouse,
+                    courier=courier,
+                    driver=driver,
+                    police=police,
+
+                    security_name=security_name,
+                    dispatcher_name=dispatcher_name,
+                    driver_name=driver_name,
+
+                    security_signature=security_signature,
+                    dispatcher_signature=dispatcher_signature,
+                    driver_signature=driver_signature
                 )
 
-                st.stop()
 
+            # -----------------------------------------------
+            # FILENAME
+            # -----------------------------------------------
 
-            # ----------------------------------------------
-            # GENERATE PDF
-            # ----------------------------------------------
-
-            pdf = generate_pdf(
-                df=df,
-                tanggal=tanggal,
-                warehouse=warehouse,
-                courier=courier,
-                driver=driver,
-                police=police,
-
-                security_name=security_name,
-                dispatcher_name=dispatcher_name,
-                driver_name=driver_name,
-
-                security_signature=security_signature,
-                dispatcher_signature=dispatcher_signature,
-                driver_signature=driver_signature
+            warehouse_safe = safe_filename(
+                warehouse
             )
 
 
             fname = (
                 f"BAST_"
+                f"{warehouse_safe}_"
                 f"{tanggal.strftime('%Y%m%d_%H%M%S')}.pdf"
             )
 
 
+            # -----------------------------------------------
+            # SUCCESS
+            # -----------------------------------------------
+
             st.success(
-                "PDF berhasil dibuat!"
+                "✅ PDF berhasil dibuat!"
             )
 
 
             st.download_button(
-                "📥 Download PDF",
+                label="📥 Download PDF",
                 data=pdf,
                 file_name=fname,
-                mime="application/pdf"
+                mime="application/pdf",
+                use_container_width=True
             )

@@ -2,6 +2,9 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 from io import StringIO
+
+from streamlit_drawable_canvas import st_canvas
+
 import io
 import re
 
